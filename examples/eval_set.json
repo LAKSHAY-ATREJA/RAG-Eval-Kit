@@ -1,0 +1,30 @@
+{
+  "corpus": {
+    "doc1": "The Subclass 485 is a temporary graduate visa allowing recent graduates to live and work in Australia.",
+    "doc2": "Retrieval augmented generation combines a retriever with a language model to ground answers in source documents.",
+    "doc3": "FAISS is a library for efficient similarity search over dense vector embeddings.",
+    "doc4": "Cosine similarity measures the angle between two vectors and is widely used to rank text relevance.",
+    "doc5": "TensorFlow and PyTorch are deep learning frameworks used to train neural networks.",
+    "doc6": "Precision and recall are classic information retrieval metrics for evaluating ranked results.",
+    "doc7": "LangChain provides building blocks for chaining language model calls into larger applications.",
+    "doc8": "A vector database stores embeddings and supports fast nearest neighbour search at scale."
+  },
+  "queries": [
+    {
+      "query": "how does retrieval augmented generation work",
+      "relevant": ["doc2", "doc7"]
+    },
+    {
+      "query": "fast similarity search over embeddings",
+      "relevant": ["doc3", "doc8", "doc4"]
+    },
+    {
+      "query": "metrics for evaluating ranked search results",
+      "relevant": ["doc6", "doc4"]
+    },
+    {
+      "query": "graduate work visa in australia",
+      "relevant": ["doc1"]
+    }
+  ]
+}

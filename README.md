@@ -1,4 +1,4 @@
-# rag-eval-kit 📊
+# rag-eval-kit 
 
 A dependency-light toolkit for **evaluating RAG retrieval quality**. Most RAG demos stop at "it returns an answer." This measures *whether the retriever actually surfaces the right documents* — the part that determines whether a RAG system is trustworthy in production.
 
@@ -26,7 +26,7 @@ The core library has **zero runtime dependencies** — every metric is pure, aud
 ## Install
 
 ```bash
-git clone https://github.com/LAKSHAY-ATREJA/rag-eval-kit.git
+git clone https://github.com/LAKSHAY-ATREJA/RAG Eval Kit.git
 cd rag-eval-kit
 pip install -e .
 ```

@@ -1,41 +1,39 @@
-# rag-eval-kit 
+# RAG Eval Kit
 
-A dependency-light toolkit for **evaluating RAG retrieval quality**. Most RAG demos stop at "it returns an answer." This measures *whether the retriever actually surfaces the right documents* — the part that determines whether a RAG system is trustworthy in production.
+A dependency-light toolkit for evaluating RAG retrieval quality. Most RAG demos stop at "it returns an answer." This measures whether the retriever actually surfaces the right documents — the part that determines whether a RAG system is trustworthy in production.
 
-![CI](https://github.com/LAKSHAY-ATREJA/rag-eval-kit/actions/workflows/ci.yml/badge.svg)
-![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
+The core library has zero runtime dependencies. Every metric is pure, auditable Python.
 
 ## Why this exists
 
-A retrieval-augmented generation system is only as good as its retriever — if the right chunks never make it into the context window, no amount of prompt engineering will save the answer. Yet most projects ship without ever measuring retrieval quality. `rag-eval-kit` provides the standard information-retrieval metrics, a reference retriever to score, and a CLI to run evaluations over a labelled dataset, so retrieval quality becomes a number you can track and regress against.
+A retrieval-augmented generation system is only as good as its retriever. If the right chunks never make it into the context window, no amount of prompt engineering will save the answer. Yet most projects ship without ever measuring retrieval quality. RAG Eval Kit provides standard information-retrieval metrics, a reference TF-IDF retriever to score, and a CLI to run evaluations over a labelled dataset — so retrieval quality becomes a number you can track and regression-test against.
 
-The core library has **zero runtime dependencies** — every metric is pure, auditable Python.
+## Metrics
 
-## Metrics implemented
+| Metric      | What it answers                                            |
+|-------------|------------------------------------------------------------|
+| Precision@k | Of the top-k retrieved, how many were relevant?            |
+| Recall@k    | Of all relevant docs, how many did we retrieve in top-k?   |
+| Hit@k       | Did any relevant doc make the top-k?                       |
+| MRR         | How highly ranked was the first relevant doc?              |
+| MAP         | Mean average precision across all relevant hits            |
+| nDCG@k      | Rank-weighted relevance (rewards putting good docs higher) |
 
-| Metric          | What it answers                                              |
-|-----------------|-------------------------------------------------------------|
-| Precision@k     | Of the top-k retrieved, how many were relevant?             |
-| Recall@k        | Of all relevant docs, how many did we retrieve in top-k?    |
-| Hit@k           | Did *any* relevant doc make the top-k?                       |
-| MRR             | How highly ranked was the first relevant doc?               |
-| MAP             | Mean average precision across all relevant hits             |
-| nDCG@k          | Rank-weighted relevance (rewards putting good docs higher)  |
-
-## Install
+## Installation
 
 ```bash
-git clone https://github.com/LAKSHAY-ATREJA/RAG Eval Kit.git
-cd rag-eval-kit
+git clone https://github.com/LAKSHAY-ATREJA/RAG-Eval-Kit.git
+cd RAG-Eval-Kit
 pip install -e .
 ```
 
-## Quick start (CLI)
+## Quick start — CLI
 
 ```bash
 rag-eval examples/eval_set.json --k 3
 ```
+
+Output:
 
 ```
 RAG retrieval evaluation  (n=4, k=3)
@@ -48,10 +46,16 @@ map              0.7500
 ndcg@k           0.8066
 ```
 
-## Use as a library
+Additional flags:
 
-Evaluate *any* retriever — the built-in TF-IDF one, or your own FAISS / vector-DB
-retriever — by passing a `(query, k) -> ranked doc ids` callable:
+```bash
+rag-eval examples/eval_set.json --k 5 --json             # emit JSON
+rag-eval examples/eval_set.json --k 5 --per-case         # show per-query breakdown
+```
+
+## Quick start — library
+
+Evaluate any retriever by passing a `(query, k) -> ranked doc ids` callable:
 
 ```python
 from rageval import TfidfRetriever, EvalCase, evaluate
@@ -66,10 +70,10 @@ cases = [EvalCase(query="how does RAG work", relevant=["doc1"])]
 
 report = evaluate(retriever.ranked_ids, cases, k=3)
 print(report.pretty())
-print(report.scores)          # dict of metric -> score
+print(report.scores)   # dict of metric -> score
 ```
 
-To benchmark your production retriever, just wrap it:
+To benchmark your production retriever, wrap it:
 
 ```python
 def my_retriever(query: str, k: int):
@@ -77,6 +81,16 @@ def my_retriever(query: str, k: int):
 
 report = evaluate(my_retriever, cases, k=5)
 ```
+
+## Demo
+
+Run the full end-to-end demonstration (no dependencies beyond the package):
+
+```bash
+python demo.py
+```
+
+The demo covers library API usage, a custom retriever, and the CLI against the bundled example dataset.
 
 ## Dataset format
 
@@ -93,7 +107,7 @@ report = evaluate(my_retriever, cases, k=5)
 
 ```bash
 pip install -e . -r requirements-dev.txt
-pytest --cov=rageval     # run the test suite with coverage
+pytest --cov=rageval     # run tests with coverage
 ruff check .             # lint
 ```
 
@@ -101,18 +115,19 @@ ruff check .             # lint
 
 ```
 rageval/
-├── metrics.py      # pure-Python IR metrics (precision, recall, MRR, MAP, nDCG)
-├── retriever.py    # reference TF-IDF retriever to evaluate
-├── evaluator.py    # aggregates metrics over a labelled set
-└── cli.py          # command-line entry point
-tests/              # full pytest suite
-examples/           # sample evaluation dataset
+    metrics.py      pure-Python IR metrics (precision, recall, MRR, MAP, nDCG)
+    retriever.py    reference TF-IDF retriever
+    evaluator.py    aggregates metrics over a labelled eval set
+    cli.py          command-line entry point
+tests/
+    test_rageval.py full pytest suite
+examples/
+    eval_set.json   sample dataset with 8-doc corpus and 4 queries
+demo.py             runnable end-to-end demonstration
 ```
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See LICENSE.
 
----
-
-Built by **Lakshay Atreja** · [github.com/LAKSHAY-ATREJA](https://github.com/LAKSHAY-ATREJA) · [linkedin.com/in/lakshay-atreja](https://linkedin.com/in/lakshay-atreja)
+Built by Lakshay Atreja.

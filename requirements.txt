@@ -1,3 +1,5 @@
 # Core library has zero runtime dependencies (pure standard library).
-# These are for development and testing only.
-pytest>=7.4
+# All functionality works with only the Python standard library.
+#
+# To install development and testing tools:
+#   pip install -r requirements-dev.txt

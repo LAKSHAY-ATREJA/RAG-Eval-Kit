@@ -1,7 +1,10 @@
 """Command-line interface: evaluate a retriever against a JSON eval set.
 
-Usage:
+Usage
+-----
     python -m rageval.cli examples/eval_set.json --k 3
+    rag-eval examples/eval_set.json --k 5 --json
+    rag-eval examples/eval_set.json --k 5 --per-case --output results.json
 """
 
 from __future__ import annotations
@@ -9,21 +12,40 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from typing import Dict, List
+from pathlib import Path
+from typing import Dict, List, Tuple
 
-from .evaluator import EvalCase, evaluate
+from .evaluator import EvalCase, EvalReport, evaluate
 from .retriever import TfidfRetriever
 
 
-def load_dataset(path: str):
-    try:
-        with open(path, "r", encoding="utf-8") as fh:
-            data = json.load(fh)
-    except FileNotFoundError:
+def load_dataset(path: str) -> Tuple[Dict[str, str], List[EvalCase]]:
+    """Parse a JSON eval set file and return (corpus, cases).
+
+    The expected JSON schema is::
+
+        {
+          "corpus": {"doc_id": "document text", ...},
+          "queries": [{"query": "...", "relevant": ["doc_id", ...]}, ...]
+        }
+    """
+    p = Path(path)
+    if not p.exists():
         print(f"Error: dataset file not found: {path}", file=sys.stderr)
         sys.exit(1)
+    if not p.is_file():
+        print(f"Error: {path} is not a file", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        with p.open("r", encoding="utf-8") as fh:
+            data = json.load(fh)
     except json.JSONDecodeError as exc:
         print(f"Error: invalid JSON in {path}: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if not isinstance(data, dict):
+        print("Error: dataset JSON must be an object at the top level", file=sys.stderr)
         sys.exit(1)
 
     missing = [key for key in ("corpus", "queries") if key not in data]
@@ -36,11 +58,26 @@ def load_dataset(path: str):
         print("Error: corpus is empty", file=sys.stderr)
         sys.exit(1)
 
-    cases: List[EvalCase] = [
-        EvalCase(query=item["query"], relevant=item["relevant"])
-        for item in data["queries"]
-        if item.get("query") and item.get("relevant")
-    ]
+    raw_queries = data.get("queries", [])
+    if not isinstance(raw_queries, list):
+        print("Error: 'queries' must be a JSON array", file=sys.stderr)
+        sys.exit(1)
+
+    cases: List[EvalCase] = []
+    for i, item in enumerate(raw_queries):
+        query = item.get("query", "").strip()
+        relevant = item.get("relevant", [])
+        if not query:
+            print(f"Warning: skipping query #{i} — empty 'query' field", file=sys.stderr)
+            continue
+        if not relevant:
+            print(
+                f"Warning: skipping query #{i} ({query!r}) — empty 'relevant' list",
+                file=sys.stderr,
+            )
+            continue
+        cases.append(EvalCase(query=query, relevant=relevant))
+
     if not cases:
         print("Error: no valid queries found in dataset", file=sys.stderr)
         sys.exit(1)
@@ -48,16 +85,64 @@ def load_dataset(path: str):
     return corpus, cases
 
 
+def _write_output(content: str, path: str) -> None:
+    """Write *content* to *path*, creating parent directories as needed."""
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(content, encoding="utf-8")
+    print(f"Results written to {out}", file=sys.stderr)
+
+
+def _format_text(report: EvalReport, per_case: bool) -> str:
+    """Format a plain-text report string."""
+    lines = [report.pretty()]
+    if per_case:
+        lines.append("")
+        lines.append("Per-query breakdown:")
+        lines.append("-" * 52)
+        for row in report.per_case:
+            lines.append(f"  {row['query'][:50]!r}")
+            for key, val in row.items():
+                if key != "query":
+                    lines.append(f"    {key:<16} {val:.4f}")
+    return "\n".join(lines)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
-        description="Evaluate a RAG retriever against a labelled dataset.",
+        prog="rag-eval",
+        description="Evaluate a RAG retriever against a labelled JSON dataset.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Example:\n  rag-eval examples/eval_set.json --k 3",
+        epilog=(
+            "Examples:\n"
+            "  rag-eval examples/eval_set.json --k 3\n"
+            "  rag-eval examples/eval_set.json --k 5 --json\n"
+            "  rag-eval examples/eval_set.json --k 5 --per-case --output results.json\n"
+        ),
     )
-    parser.add_argument("dataset", help="Path to a JSON eval set.")
-    parser.add_argument("--k", type=int, default=5, help="Cutoff rank (default 5).")
-    parser.add_argument("--json", action="store_true", help="Emit JSON scores.")
-    parser.add_argument("--per-case", action="store_true", help="Show per-query scores.")
+    parser.add_argument("dataset", help="Path to a JSON eval set file.")
+    parser.add_argument(
+        "--k",
+        type=int,
+        default=5,
+        metavar="K",
+        help="Cutoff rank — only the top-K results are considered (default: 5).",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit results as JSON instead of plain text.",
+    )
+    parser.add_argument(
+        "--per-case",
+        action="store_true",
+        help="Include per-query score breakdown.",
+    )
+    parser.add_argument(
+        "--output",
+        metavar="FILE",
+        help="Write results to FILE instead of stdout.",
+    )
     args = parser.parse_args(argv)
 
     if args.k < 1:
@@ -67,24 +152,21 @@ def main(argv=None) -> int:
     corpus, cases = load_dataset(args.dataset)
     retriever = TfidfRetriever().index(corpus)
 
-    report = evaluate(retriever.ranked_ids, cases, k=args.k)
+    report = evaluate(retriever.ranked_ids, cases, k=args.k, retriever_name="TF-IDF")
 
     if args.json:
-        output = {"summary": report.scores}
-        if args.per_case:
-            output["per_case"] = report.per_case
-        print(json.dumps(output, indent=2))
+        output_data = report.to_dict()
+        if not args.per_case:
+            output_data.pop("per_case", None)
+        result = json.dumps(output_data, indent=2)
     else:
-        print(report.pretty())
-        if args.per_case:
-            print()
-            print("Per-query breakdown:")
-            print("-" * 44)
-            for row in report.per_case:
-                print(f"  {row['query'][:40]!r}")
-                for k, v in row.items():
-                    if k != "query":
-                        print(f"    {k:<16} {v:.4f}")
+        result = _format_text(report, per_case=args.per_case)
+
+    if args.output:
+        _write_output(result, args.output)
+    else:
+        print(result)
+
     return 0
 
 
